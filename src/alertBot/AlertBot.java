@@ -22,7 +22,7 @@ import com.nandbox.bots.api.util.Utils;
 
 import net.minidev.json.JSONObject;
 public class AlertBot {
-	public static long GetWaitTime(int time,char format,long currentTime) {
+	public static long GetWakeUpTime(int time,char format,long currentTime) {
 		//format = 1 => minute
 		//format = 2 => hours
 		//format = 3 => days
@@ -42,11 +42,9 @@ public class AlertBot {
 			time_in_minutes = time*7*24*60;
 		}
 		long currentTimeMillis = currentTime;
-		//long currentTimeMillis = System.currentTimeMillis();
 		long currentTimeSeconds = currentTimeMillis / 1000L;
 		long currentTimeMinutes = (currentTimeSeconds/60L);
 		long wakeUpEpoch = (currentTimeMinutes + time_in_minutes)*60*1000;
-		//long waitTime = wakeUpEpoch - currentTimeSeconds;
 		return wakeUpEpoch;
 	}
 	
@@ -55,7 +53,6 @@ public class AlertBot {
 		
 		
 		NandboxClient client = NandboxClient.get();
-		//90091791325349537:0:7W4QWtFYd1rxfcApKROu3kel7p5SE6
 		
 		client.connect("90091808909413495:0:yvhfDM5QExB54ywSCL260XS8D407gc", new Nandbox.Callback() {
 			Nandbox.Api api = null;
@@ -70,49 +67,56 @@ public class AlertBot {
 			@Override
 			public void onReceive(IncomingMessage incomingMsg) {
 				
+				//get the chat type, the chat ID, and the time the message was sent which will be used later
 				String chatType = incomingMsg.getChat().getType();
 				String chatId = incomingMsg.getChat().getId();
 				long currentTime = incomingMsg.getDate();
+				
+				//Text alert: make sure it is sent in a channel by an admin, or in a non-channel chat
 				if (incomingMsg.isTextMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) {
-					//check if it follows the alert format
+					//check if it follows the text alert format
 					String messageText = incomingMsg.getText();
-					//Text alert
 					if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+.+").matcher(messageText).matches()) {
 						String[] messageSplit = messageText.split(" ",3);
 						String timeString = messageSplit[1];
 						String alertText = messageSplit[2];
 						
 						
-						//get the time format (m,h,d,w)
+						//get the time format (m,h,d,w) and the wait time, which will be used to get the wake up Epoch
 						char format = timeString.charAt(timeString.length() - 1);
 						int time = Integer.parseInt(timeString.substring(0, timeString.length()-1));
-						long waitTime = GetWaitTime(time,format,currentTime);
+						long wakeUpTime = GetWakeUpTime(time,format,currentTime);
 						
+						//Send a confirmation message to the user to let him/her know that the alert has been set
 						TextOutMessage confirmationMessage = new TextOutMessage();
 						long reference = Utils.getUniqueId();
 						confirmationMessage.setChatId(chatId);
 						confirmationMessage.setReference(reference);
-						confirmationMessage.setText("Alert has been set");
+						confirmationMessage.setText("Text Alert has been set");
 						if(incomingMsg.getChatSettings() == 1) {
 							confirmationMessage.setChatSettings(1);
 							confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
 						}
 						api.send(confirmationMessage);
 
+						//Schedule the alert message to be sent at the specified time
 						TextOutMessage message = new TextOutMessage();
 						reference = Utils.getUniqueId();
 						message.setChatId(chatId);
 						message.setReference(reference);
-						message.setScheduleDate(waitTime);
+						message.setScheduleDate(wakeUpTime);
 						message.setText(alertText);
 						api.send(message);
 						
 					}
 					
 				}
+				
+				
+				//Photo alert: make sure it is sent in a channel by an admin, or in a non-channel chat
 				else if(incomingMsg.isPhotoMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
 				{
-					//Photo alert
+					//check if the caption follows the photo alert format
 					String photoCaption = incomingMsg.getCaption();
 					if(Pattern.compile("\\/alertPhoto\\s[0-9]+[m,h,d,w]\\s*").matcher(photoCaption).matches()) 
 					{
@@ -121,28 +125,30 @@ public class AlertBot {
 						String photoId = incomingMsg.getPhoto().getId();
 						
 						
-						//get the time format (m,h,d,w)
+						//get the time format (m,h,d,w) and the wait time, which will be used to get the wake up Epoch
 						char format = timeString.charAt(timeString.length() - 1);
 						int time = Integer.parseInt(timeString.substring(0, timeString.length()-1));
-						long waitTime = GetWaitTime(time,format,currentTime);
+						long wakeUpTime = GetWakeUpTime(time,format,currentTime);
 						
+						
+						//Send a confirmation message to the user to let him/her know that the alert has been set
 						TextOutMessage confirmationMessage = new TextOutMessage();
 						long reference = Utils.getUniqueId();
 						confirmationMessage.setChatId(chatId);
 						confirmationMessage.setReference(reference);
-						confirmationMessage.setText("Alert has been set");
+						confirmationMessage.setText("Photo Alert has been set");
 						if(incomingMsg.getChatSettings() == 1) {
 							confirmationMessage.setChatSettings(1);
 							confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
 						}
 						api.send(confirmationMessage);
 						
-						
+						//Schedule the alert message to be sent at the specified time
 						PhotoOutMessage message = new PhotoOutMessage();
 						reference = Utils.getUniqueId();
 						message.setChatId(chatId);
 						message.setReference(reference);
-						message.setScheduleDate(waitTime);
+						message.setScheduleDate(wakeUpTime);
 						message.setPhoto(photoId);
 						message.setCaption("");
 						api.send(message);
