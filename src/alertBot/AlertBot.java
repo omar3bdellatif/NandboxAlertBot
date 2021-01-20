@@ -74,7 +74,7 @@ public class AlertBot {
 				
 				//Text alert: make sure it is sent in a channel by an admin, or in a non-channel chat
 				if (incomingMsg.isTextMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) {
-					//check if it follows the text alert format
+					//check if it follows the text alert format using a regex
 					String messageText = incomingMsg.getText();
 					if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+.+").matcher(messageText).matches()) {
 						String[] messageSplit = messageText.split(" ",3);
@@ -116,7 +116,7 @@ public class AlertBot {
 				//Photo alert: make sure it is sent in a channel by an admin, or in a non-channel chat
 				else if(incomingMsg.isPhotoMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
 				{
-					//check if the caption follows the photo alert format
+					//check if the caption follows the photo alert format using a regex
 					String photoCaption = incomingMsg.getCaption();
 					if(Pattern.compile("\\/alertPhoto\\s[0-9]+[m,h,d,w]\\s*").matcher(photoCaption).matches()) 
 					{
