@@ -344,7 +344,7 @@ public class AlertBot {
 					{
 						PhotoOutMessage message = new PhotoOutMessage();
 						message.setPhoto(incomingMsg.getPhoto().getId());
-						message.setCaption("");
+						message.setCaption(incomingMsg.getCaption());
 						message = (PhotoOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
 						
