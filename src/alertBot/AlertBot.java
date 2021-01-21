@@ -1,5 +1,13 @@
 package alertBot;
 import java.util.regex.Pattern;
+import java.time.Instant;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.TimeZone;
 
 import com.nandbox.bots.api.Nandbox;
 import com.nandbox.bots.api.Nandbox.Api;
@@ -17,17 +25,46 @@ import com.nandbox.bots.api.inmessages.MessageAck;
 import com.nandbox.bots.api.inmessages.PermanentUrl;
 import com.nandbox.bots.api.inmessages.WhiteList;
 import com.nandbox.bots.api.outmessages.TextOutMessage;
+import com.nandbox.bots.api.outmessages.OutMessage;
 import com.nandbox.bots.api.outmessages.PhotoOutMessage;
+import com.nandbox.bots.api.outmessages.AudioOutMessage;
+import com.nandbox.bots.api.outmessages.ArticleOutMessage;
+import com.nandbox.bots.api.outmessages.ContactOutMessage;
+import com.nandbox.bots.api.outmessages.DocumentOutMessage;
+import com.nandbox.bots.api.outmessages.UserOutMessage;
+import com.nandbox.bots.api.outmessages.VideoOutMessage;
+import com.nandbox.bots.api.outmessages.VoiceOutMessage;
+import com.nandbox.bots.api.outmessages.UpdateOutMessage;
+import com.nandbox.bots.api.outmessages.LocationOutMessage;
+import com.nandbox.bots.api.outmessages.GifOutMessage;
+
 import com.nandbox.bots.api.util.Utils;
 
 import net.minidev.json.JSONObject;
-public class AlertBot {
-	public static long GetWakeUpTime(int time,char format,long currentTime) {
+
+
+class MessageRecaller{
+	String chatId;
+	String messageId;
+	String toUserId;
+	long reference;
+	
+	public MessageRecaller(String chatId,String messageId,String toUserId,long reference) {
+		this.chatId = chatId;
+		this.messageId = messageId;
+		this.toUserId = toUserId;
+		this.reference = reference;
+	}
+}
+
+class Helper{
+	public long GetWakeUpTime(int time,char format,long currentTime) {
 		//format = 1 => minute
 		//format = 2 => hours
 		//format = 3 => days
 		//format = 4 => weeks
 		//otherwise => error
+		
 		long time_in_minutes = 0;
 		if(format == 'm') {
 			time_in_minutes = time;
@@ -48,13 +85,99 @@ public class AlertBot {
 		return wakeUpEpoch;
 	}
 	
+	public long timeStringToScheduledTime_A(String timeString,long sendingTime) {
+		char format = timeString.charAt(timeString.length() - 1);
+		int time = Integer.parseInt(timeString.substring(0, timeString.length()-1));
+		long scheduledTime = GetWakeUpTime(time,format,sendingTime);
+		return scheduledTime;
+	}
+	
+	public long timeStringToScheduledTime_B(String timeString) throws ParseException {
+		Date wakeUpDate=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(timeString);
+		long scheduledTime = wakeUpDate.getTime();
+		return scheduledTime;
+	}
+	
+	public OutMessage setMessageBasics(OutMessage message,String chatId,Long scheduledTime) {
+		message.setChatId(chatId);
+		long reference = Utils.getUniqueId();
+		message.setReference(reference);
+		if(scheduledTime != null) {
+			message.setScheduleDate(scheduledTime);
+		}
+		return message;
+	}
+	
+	
+	
+	//Format checking using regex
+	public boolean isHelpCommand(String messageText) {
+		if(Pattern.compile("\\/help\\s*").matcher(messageText).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean isAlertCommand(String messageText) {
+		if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+.+").matcher(messageText).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean isiAlertCommand_A(String messageText) {
+		if(Pattern.compile("\\/ialert\\s[0-9]+[m,h,d,w]\\s*").matcher(messageText).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean isiAlertCommand_B(String messageText) {
+		if(Pattern.compile("\\/ialert\\s[0-9]{4}-[0-9]{2}-[0-9]{2}\\s(([0-1][0-9])|(2[0-3])):[0-5][0-9]:[0-5][0-9]").matcher(messageText).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean isPhotoAlertCommand(String photoCaption) {
+		if(Pattern.compile("\\/alertPhoto\\s[0-9]+[m,h,d,w]\\s*").matcher(photoCaption).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	//Check whether the provided time is in the format "20m","5h","2d","2w"
+	public boolean isTimeFormatA(String timeString) {
+		if(Pattern.compile("[0-9]+[m,h,d,w]\\s*").matcher(timeString).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	//Check whether the provided time is in the format "yyyy-MM-dd HH:mm:ss"
+	public boolean isTimeFormatB(String timeString) {
+		if(Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}\\s(([0-1][0-9])|(2[0-3])):[0-5][0-9]:[0-5][0-9]").matcher(timeString).matches()) {
+			return true;
+		}
+		return false;
+	}
+}
+
+public class AlertBot {
+	static HashMap<String,String> refToChat = new HashMap<String,String>();
+	
+	//Placeholder left to be used when implementing the Alert Editing feature
+	//static ArrayList<MessageRecaller> scheduledMessages = new ArrayList<MessageRecaller>();
+	
 	
 	public static void main(String[] args) throws Exception {
-		
+		//The Helper class contains some helper functions which are called when needed
+		Helper help = new Helper();
 		
 		NandboxClient client = NandboxClient.get();
 		
-		client.connect("90091808909413495:0:yvhfDM5QExB54ywSCL260XS8D407gc", new Nandbox.Callback() {
+		String BotToken = "90091808909413495:0:yvhfDM5QExB54ywSCL260XS8D407gc";
+		client.connect(BotToken, new Nandbox.Callback() {
 			Nandbox.Api api = null;
 			
 			@Override
@@ -63,97 +186,315 @@ public class AlertBot {
 				System.out.println("Authenticated");
 				this.api = api;
 			}
-
+			
 			@Override
 			public void onReceive(IncomingMessage incomingMsg) {
 				
-				//get the chat type, the chat ID, and the time the message was sent which will be used later
+				//get the chat type, the chat ID, the user ID, and the time the message was sent which will be used later
 				String chatType = incomingMsg.getChat().getType();
 				String chatId = incomingMsg.getChat().getId();
-				long currentTime = incomingMsg.getDate();
+				String userId = incomingMsg.getFrom().getId();
+				String incomingMessageId = incomingMsg.getMessageId();
+				long incomingReference = incomingMsg.getReference();
+				long sendingTime = incomingMsg.getDate();
 				
-				//Text alert: make sure it is sent in a channel by an admin, or in a non-channel chat
-				if (incomingMsg.isTextMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) {
-					//check if it follows the text alert format using a regex
-					String messageText = incomingMsg.getText();
-					if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+.+").matcher(messageText).matches()) {
-						String[] messageSplit = messageText.split(" ",3);
-						String timeString = messageSplit[1];
-						String alertText = messageSplit[2];
-						
-						
-						//get the time format (m,h,d,w) and the wait time, which will be used to get the wake up Epoch
-						char format = timeString.charAt(timeString.length() - 1);
-						int time = Integer.parseInt(timeString.substring(0, timeString.length()-1));
-						long wakeUpTime = GetWakeUpTime(time,format,currentTime);
-						
-						//Send a confirmation message to the user to let him/her know that the alert has been set
-						TextOutMessage confirmationMessage = new TextOutMessage();
-						long reference = Utils.getUniqueId();
-						confirmationMessage.setChatId(chatId);
-						confirmationMessage.setReference(reference);
-						confirmationMessage.setText("Text Alert has been set");
-						if(incomingMsg.getChatSettings() == 1) {
-							confirmationMessage.setChatSettings(1);
-							confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
+				
+				System.out.println("ChatId: "+chatId+" To: "+userId+" reference: "+Long.toString(incomingReference)+" messageId: "+incomingMessageId);
+				/*MessageRecaller incomingMsgRecaller = new MessageRecaller(chatId,incomingMessageId,userId,incomingReference);
+				if(scheduledMessages.indexOf(incomingMsgRecaller) != -1) {
+					System.out.println("Found edited existing Message");
+				}
+				*/
+				
+				//If this value timeString exists (not null) then the user has used the iAlert command and is now sending the alert message
+				String timeString = refToChat.get(userId+chatId);
+				if(timeString != null) {
+					refToChat.remove(userId+chatId);
+					long scheduledTime = 0;
+					if(help.isTimeFormatA(timeString)) 
+					{
+						scheduledTime = help.timeStringToScheduledTime_A(timeString, sendingTime);
+					}
+					
+					else if(help.isTimeFormatB(timeString)) 
+					{
+						try 
+						{
+							scheduledTime = help.timeStringToScheduledTime_B(timeString);
+						} catch (ParseException e) 
+						{
+							TextOutMessage errorMessage = new TextOutMessage();
+							errorMessage.setText("Please make sure you entered the date in the format yyyy-MM-dd HH:mm:ss");
+							if(incomingMsg.getChatSettings() == 1) 
+							{
+								errorMessage.setChatSettings(1);
+								errorMessage.setToUserId(incomingMsg.getFrom().getId());
+							}
+							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+							api.send(errorMessage);
+							return;
 						}
-						api.send(confirmationMessage);
-
-						//Schedule the alert message to be sent at the specified time
-						TextOutMessage message = new TextOutMessage();
-						reference = Utils.getUniqueId();
-						message.setChatId(chatId);
-						message.setReference(reference);
-						message.setScheduleDate(wakeUpTime);
-						message.setText(alertText);
+						
+						
+						//Handling the case where the user sets the date format to be in a past time, or sends the alert message after the scheduled date had already passed
+						long currentEpoch = Instant.now().toEpochMilli();
+						if(currentEpoch > scheduledTime)
+						{
+							TextOutMessage errorMessage = new TextOutMessage();
+							errorMessage.setText("The specified alert time has already passed. Please make sure you send your alert message before the specified alert time");
+							if(incomingMsg.getChatSettings() == 1) 
+							{
+								errorMessage.setChatSettings(1);
+								errorMessage.setToUserId(incomingMsg.getFrom().getId());
+							}
+							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+							api.send(errorMessage);
+							return;
+							
+						}
+					}
+					
+					else 
+					{
+						TextOutMessage errorMessage = new TextOutMessage();
+						errorMessage.setText("Please make sure you entered the alert/ialert command in the correct format. Type /help for more info");
+						if(incomingMsg.getChatSettings() == 1) 
+						{
+							errorMessage.setChatSettings(1);
+							errorMessage.setToUserId(incomingMsg.getFrom().getId());
+						}
+						errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+						api.send(errorMessage);
+						return;
+					}
+						
+					
+					
+					if(incomingMsg.isAudioMsg()) 
+					{
+						AudioOutMessage message = new AudioOutMessage();
+						message.setAudio(incomingMsg.getAudio().getId());
+						message = (AudioOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
 						api.send(message);
+					
+					}
+					
+					else if(incomingMsg.isContactMsg()) 
+					{
+						ContactOutMessage message = new ContactOutMessage();
+						message.setPhoneNumber(incomingMsg.getContact().getPhoneNumber());
+						message.setName(incomingMsg.getContact().getName());
+						message = (ContactOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+
+					}
+					
+					else if(incomingMsg.isDocumentMsg()) 
+					{
+						DocumentOutMessage message = new DocumentOutMessage();
+						message.setDocument(incomingMsg.getDocument().getId());
+						message = (DocumentOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+
+					}
+					
+					else if(incomingMsg.isGifMsg()) 
+					{
+						GifOutMessage message;
+						//message.setGif(incomingMsg.getGif().getId());	
+						String gifID = incomingMsg.getGif().getId();
+						if(gifID.endsWith(".gif")) 
+						{
+							message = new GifOutMessage(GifOutMessage.GifType.PHOTO);
+						}
+						else
+						{
+							message = new GifOutMessage(GifOutMessage.GifType.VIDEO);
+						}
+						message.setGif(incomingMsg.getGif().getId());
+						message = (GifOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+					}
+					
+					else if(incomingMsg.isLocationMsg()) 
+					{
+						LocationOutMessage message = new LocationOutMessage();
+						message.setLatitude(incomingMsg.getLocation().getLatitude());
+						message.setLongitude(incomingMsg.getLocation().getLongitude());
+						message = (LocationOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+	
+					}
+					
+					else if(incomingMsg.isPhotoMsg()) 
+					{
+						PhotoOutMessage message = new PhotoOutMessage();
+						message.setPhoto(incomingMsg.getPhoto().getId());
+						message.setCaption("");
+						message = (PhotoOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+
+					}
+					
+					//Placeholder left to handle sticker alerts later
+					//else if(incomingMsg.isStickerMsg()) 
+					//{
+					//	StickerOutMessage message = new StickerOutMessage();					
+					//}
+					
+					else if(incomingMsg.isTextFileMsg() || incomingMsg.isTextMsg()) 
+					{
+						TextOutMessage message = new TextOutMessage();
+						message.setText(incomingMsg.getText());
+						message.setBgColor(incomingMsg.getBgColor());
+						message = (TextOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+						
+
+					}
+					
+					else if(incomingMsg.isVideoMsg()) 
+					{
+						VideoOutMessage message = new VideoOutMessage();
+						message.setVideo(incomingMsg.getVideo().getId());
+						message.setCaption(incomingMsg.getCaption());
+						message = (VideoOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+
+					}
+					
+					else if(incomingMsg.isVoiceMsg()) 
+					{
+						VoiceOutMessage message = new VoiceOutMessage();
+						message.setVoice(incomingMsg.getVoice().getId());
+						message = (VoiceOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						api.send(message);
+						
+						//Placeholder left to implement Alert Editing feature
+						/*String toUserId = message.getToUserId();
+						long reference = message.getReference();
+						JSONObject jsonMessage = message.toJsonObject();
+						String messageId = (String) jsonMessage.get("message_id");
+						MessageRecaller msgRecall = new MessageRecaller(chatId,messageId,toUserId,reference);
+						scheduledMessages.add(msgRecall);*/
+					}
+					
+					
+					
+					
+				}
+				
+
+				//Check if the received message is a text message
+				else if (incomingMsg.isTextMsg()) 
+				{
+					
+					String messageText = incomingMsg.getText();
+					
+					//Help command
+					if(help.isHelpCommand(messageText)) 
+					{
+						TextOutMessage message = new TextOutMessage();
+						message.setText("Insert help text here");
+						message = (TextOutMessage) help.setMessageBasics(message, chatId, null);
+						api.send(message);
+					}
+					
+					//Before we check if it follows the alert/ialert commands, make sure it's sent from an admin if it was sent in a chat of type Channel
+					else if((((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
+					{
+
+						if(help.isAlertCommand(messageText)) 
+						{
+							String[] messageSplit = messageText.split(" ",3);
+							timeString = messageSplit[1];
+							String alertText = messageSplit[2];
+	
+							long wakeUpTime = help.timeStringToScheduledTime_A(timeString, sendingTime);
+
+							//Send a confirmation message to the user to let him/her know that the alert has been set
+							TextOutMessage confirmationMessage = new TextOutMessage();
+							confirmationMessage.setText("Text Alert has been set");
+							if(incomingMsg.getChatSettings() == 1) 
+							{
+								confirmationMessage.setChatSettings(1);
+								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
+								
+							}
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
+							api.send(confirmationMessage);
+	
+							//Schedule the alert message to be sent at the specified time
+							TextOutMessage message = new TextOutMessage();
+							message.setText(alertText);
+							message = (TextOutMessage) help.setMessageBasics(message, chatId, wakeUpTime);
+							api.send(message);
+							
+						}
+						
+						else if (help.isiAlertCommand_A(messageText) || help.isiAlertCommand_B(messageText)) 
+						{
+							String[] messageSplit = messageText.split(" ",2);
+							timeString = messageSplit[1];
+							
+							
+							//Send a confirmation message to the user to let him/her know that the alert has been set
+							TextOutMessage confirmationMessage = new TextOutMessage();
+							confirmationMessage.setText("Please send me your alert message");
+							if(incomingMsg.getChatSettings() == 1) 
+							{
+								confirmationMessage.setChatSettings(1);
+								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
+							}
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
+							api.send(confirmationMessage);
+							
+							
+							refToChat.put(userId+chatId,timeString);
+							
+						}
 						
 					}
 					
 				}
 				
-				
-				//Photo alert: make sure it is sent in a channel by an admin, or in a non-channel chat
-				else if(incomingMsg.isPhotoMsg() && (((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
+
+				//Photo alert
+				else if(incomingMsg.isPhotoMsg()) 
 				{
-					//check if the caption follows the photo alert format using a regex
-					String photoCaption = incomingMsg.getCaption();
-					if(Pattern.compile("\\/alertPhoto\\s[0-9]+[m,h,d,w]\\s*").matcher(photoCaption).matches()) 
+					if((((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
 					{
-						String[] messageSplit = photoCaption.split(" ",2);
-						String timeString = messageSplit[1];
-						String photoId = incomingMsg.getPhoto().getId();
-						
-						
-						//get the time format (m,h,d,w) and the wait time, which will be used to get the wake up Epoch
-						char format = timeString.charAt(timeString.length() - 1);
-						int time = Integer.parseInt(timeString.substring(0, timeString.length()-1));
-						long wakeUpTime = GetWakeUpTime(time,format,currentTime);
-						
-						
-						//Send a confirmation message to the user to let him/her know that the alert has been set
-						TextOutMessage confirmationMessage = new TextOutMessage();
-						long reference = Utils.getUniqueId();
-						confirmationMessage.setChatId(chatId);
-						confirmationMessage.setReference(reference);
-						confirmationMessage.setText("Photo Alert has been set");
-						if(incomingMsg.getChatSettings() == 1) {
-							confirmationMessage.setChatSettings(1);
-							confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
+
+						//check if the caption follows the photo alert format using a regex
+						String photoCaption = incomingMsg.getCaption();
+						if(help.isPhotoAlertCommand(photoCaption)) 
+						{
+							String photoId = incomingMsg.getPhoto().getId();
+							
+							String[] messageSplit = photoCaption.split(" ",2);
+							timeString = messageSplit[1];
+							long wakeUpTime = help.timeStringToScheduledTime_A(timeString, sendingTime);
+							
+							
+							//Send a confirmation message to the user to let him/her know that the alert has been set
+							TextOutMessage confirmationMessage = new TextOutMessage();
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
+							confirmationMessage.setText("Photo Alert has been set");
+							if(incomingMsg.getChatSettings() == 1) 
+							{
+								confirmationMessage.setChatSettings(1);
+								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
+							}
+							api.send(confirmationMessage);
+							
+							//Schedule the alert message to be sent at the specified time
+							PhotoOutMessage message = new PhotoOutMessage();
+							message.setPhoto(photoId);
+							message.setCaption("");
+							message = (PhotoOutMessage) help.setMessageBasics(message, chatId, wakeUpTime);
+							api.send(message);
 						}
-						api.send(confirmationMessage);
-						
-						//Schedule the alert message to be sent at the specified time
-						PhotoOutMessage message = new PhotoOutMessage();
-						reference = Utils.getUniqueId();
-						message.setChatId(chatId);
-						message.setReference(reference);
-						message.setScheduleDate(wakeUpTime);
-						message.setPhoto(photoId);
-						message.setCaption("");
-						api.send(message);
 					}
-					
 				}	
 
 		}
