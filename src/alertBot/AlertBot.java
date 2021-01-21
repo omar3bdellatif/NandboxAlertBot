@@ -98,16 +98,32 @@ class Helper{
 		return scheduledTime;
 	}
 	
-	public OutMessage setMessageBasics(OutMessage message,String chatId,Long scheduledTime) {
+	public OutMessage setMessageBasics(OutMessage message,String chatId,Long scheduledTime,Integer chatSettings,String toUserId) {
+		
 		message.setChatId(chatId);
 		long reference = Utils.getUniqueId();
 		message.setReference(reference);
 		if(scheduledTime != null) {
 			message.setScheduleDate(scheduledTime);
 		}
+		System.out.println("Setting message basics");
+		if(chatSettings != null &&chatSettings == 1) 
+		{
+			System.out.println("Setting message basics");
+			message.setChatSettings(1);
+			message.setToUserId(toUserId);
+			
+		}
 		return message;
 	}
 	
+	public void sendConfirmationMessage(String chatId,Api api,int chatSettings,String toUserId) {
+		System.out.println("Sending confirmation message here");
+		TextOutMessage confirmationMessage = new TextOutMessage();
+		confirmationMessage.setText("Alert has been scheduled");
+		confirmationMessage = (TextOutMessage) setMessageBasics(confirmationMessage, chatId,null,chatSettings,toUserId);
+		api.send(confirmationMessage);
+	}
 	
 	
 	//Format checking using regex
@@ -119,7 +135,7 @@ class Helper{
 	}
 	
 	public boolean isAlertCommand(String messageText) {
-		if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+.+").matcher(messageText).matches()) {
+		if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+(.|\\n)+").matcher(messageText).matches()) {
 			return true;
 		}
 		return false;
@@ -225,12 +241,8 @@ public class AlertBot {
 						{
 							TextOutMessage errorMessage = new TextOutMessage();
 							errorMessage.setText("Please make sure you entered the date in the format yyyy-MM-dd HH:mm:ss");
-							if(incomingMsg.getChatSettings() == 1) 
-							{
-								errorMessage.setChatSettings(1);
-								errorMessage.setToUserId(incomingMsg.getFrom().getId());
-							}
-							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+							
+							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 							api.send(errorMessage);
 							return;
 						}
@@ -242,12 +254,8 @@ public class AlertBot {
 						{
 							TextOutMessage errorMessage = new TextOutMessage();
 							errorMessage.setText("The specified alert time has already passed. Please make sure you send your alert message before the specified alert time");
-							if(incomingMsg.getChatSettings() == 1) 
-							{
-								errorMessage.setChatSettings(1);
-								errorMessage.setToUserId(incomingMsg.getFrom().getId());
-							}
-							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+							
+							errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 							api.send(errorMessage);
 							return;
 							
@@ -258,12 +266,8 @@ public class AlertBot {
 					{
 						TextOutMessage errorMessage = new TextOutMessage();
 						errorMessage.setText("Please make sure you entered the alert/ialert command in the correct format. Type /help for more info");
-						if(incomingMsg.getChatSettings() == 1) 
-						{
-							errorMessage.setChatSettings(1);
-							errorMessage.setToUserId(incomingMsg.getFrom().getId());
-						}
-						errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null);
+						
+						errorMessage = (TextOutMessage) help.setMessageBasics(errorMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 						api.send(errorMessage);
 						return;
 					}
@@ -274,8 +278,10 @@ public class AlertBot {
 					{
 						AudioOutMessage message = new AudioOutMessage();
 						message.setAudio(incomingMsg.getAudio().getId());
-						message = (AudioOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (AudioOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 					
 					}
 					
@@ -284,8 +290,10 @@ public class AlertBot {
 						ContactOutMessage message = new ContactOutMessage();
 						message.setPhoneNumber(incomingMsg.getContact().getPhoneNumber());
 						message.setName(incomingMsg.getContact().getName());
-						message = (ContactOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (ContactOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 
 					}
 					
@@ -293,8 +301,10 @@ public class AlertBot {
 					{
 						DocumentOutMessage message = new DocumentOutMessage();
 						message.setDocument(incomingMsg.getDocument().getId());
-						message = (DocumentOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (DocumentOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 
 					}
 					
@@ -312,8 +322,10 @@ public class AlertBot {
 							message = new GifOutMessage(GifOutMessage.GifType.VIDEO);
 						}
 						message.setGif(incomingMsg.getGif().getId());
-						message = (GifOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (GifOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 					}
 					
 					else if(incomingMsg.isLocationMsg()) 
@@ -321,8 +333,10 @@ public class AlertBot {
 						LocationOutMessage message = new LocationOutMessage();
 						message.setLatitude(incomingMsg.getLocation().getLatitude());
 						message.setLongitude(incomingMsg.getLocation().getLongitude());
-						message = (LocationOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (LocationOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 	
 					}
 					
@@ -331,9 +345,10 @@ public class AlertBot {
 						PhotoOutMessage message = new PhotoOutMessage();
 						message.setPhoto(incomingMsg.getPhoto().getId());
 						message.setCaption("");
-						message = (PhotoOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (PhotoOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
-
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 					}
 					
 					//Placeholder left to handle sticker alerts later
@@ -347,9 +362,11 @@ public class AlertBot {
 						TextOutMessage message = new TextOutMessage();
 						message.setText(incomingMsg.getText());
 						message.setBgColor(incomingMsg.getBgColor());
-						message = (TextOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (TextOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+
 						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 
 					}
 					
@@ -358,8 +375,10 @@ public class AlertBot {
 						VideoOutMessage message = new VideoOutMessage();
 						message.setVideo(incomingMsg.getVideo().getId());
 						message.setCaption(incomingMsg.getCaption());
-						message = (VideoOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (VideoOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 
 					}
 					
@@ -367,8 +386,10 @@ public class AlertBot {
 					{
 						VoiceOutMessage message = new VoiceOutMessage();
 						message.setVoice(incomingMsg.getVoice().getId());
-						message = (VoiceOutMessage) help.setMessageBasics(message, chatId, scheduledTime);
+						message = (VoiceOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
 						api.send(message);
+						
+						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 						
 						//Placeholder left to implement Alert Editing feature
 						/*String toUserId = message.getToUserId();
@@ -395,8 +416,9 @@ public class AlertBot {
 					if(help.isHelpCommand(messageText)) 
 					{
 						TextOutMessage message = new TextOutMessage();
-						message.setText("Insert help text here");
-						message = (TextOutMessage) help.setMessageBasics(message, chatId, null);
+						message.setText("Commands:\n1-/alert time text\nSends text alerts\ntime field format is any number of digits followed by 'm','h','d','w' which stand for minutes, hours, weeks, and months respectively, for example: '/alert 1h Dental appointment'\n\n2-/alertPhoto time\nSends photo alerts.\nSent in the caption of a photo.\ntime field format is the same as described above.\n\n3-/ialert time\nSends any kind of alert.\ntime field format is the same as described above, or it can take the format 'yyyy-MM-dd HH:mm:ss', for example: '/ialert 2021-01-24 09:05:15'\nAfter you send this command, you will be asked to send the alert message, which could be a text message, a video, a gif...etc");
+						
+						message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 						api.send(message);
 					}
 					
@@ -414,21 +436,19 @@ public class AlertBot {
 
 							//Send a confirmation message to the user to let him/her know that the alert has been set
 							TextOutMessage confirmationMessage = new TextOutMessage();
-							confirmationMessage.setText("Text Alert has been set");
-							if(incomingMsg.getChatSettings() == 1) 
-							{
-								confirmationMessage.setChatSettings(1);
-								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
-								
-							}
-							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
+							confirmationMessage.setText("Text Alert has been scheduled");
+							
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 							api.send(confirmationMessage);
 	
 							//Schedule the alert message to be sent at the specified time
 							TextOutMessage message = new TextOutMessage();
 							message.setText(alertText);
-							message = (TextOutMessage) help.setMessageBasics(message, chatId, wakeUpTime);
+							message.setBgColor(incomingMsg.getBgColor());
+							message = (TextOutMessage) help.setMessageBasics(message, chatId, wakeUpTime,null,incomingMsg.getFrom().getId());
 							api.send(message);
+							
+							
 							
 						}
 						
@@ -441,12 +461,8 @@ public class AlertBot {
 							//Send a confirmation message to the user to let him/her know that the alert has been set
 							TextOutMessage confirmationMessage = new TextOutMessage();
 							confirmationMessage.setText("Please send me your alert message");
-							if(incomingMsg.getChatSettings() == 1) 
-							{
-								confirmationMessage.setChatSettings(1);
-								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
-							}
-							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
+							
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
 							api.send(confirmationMessage);
 							
 							
@@ -478,20 +494,16 @@ public class AlertBot {
 							
 							//Send a confirmation message to the user to let him/her know that the alert has been set
 							TextOutMessage confirmationMessage = new TextOutMessage();
-							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null);
-							confirmationMessage.setText("Photo Alert has been set");
-							if(incomingMsg.getChatSettings() == 1) 
-							{
-								confirmationMessage.setChatSettings(1);
-								confirmationMessage.setToUserId(incomingMsg.getFrom().getId());
-							}
+							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
+							confirmationMessage.setText("Photo Alert has been scheduled");
+							
 							api.send(confirmationMessage);
 							
 							//Schedule the alert message to be sent at the specified time
 							PhotoOutMessage message = new PhotoOutMessage();
 							message.setPhoto(photoId);
 							message.setCaption("");
-							message = (PhotoOutMessage) help.setMessageBasics(message, chatId, wakeUpTime);
+							message = (PhotoOutMessage) help.setMessageBasics(message, chatId, wakeUpTime,null,incomingMsg.getFrom().getId());
 							api.send(message);
 						}
 					}
