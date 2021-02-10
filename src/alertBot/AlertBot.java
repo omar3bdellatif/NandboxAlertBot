@@ -1,13 +1,11 @@
 package alertBot;
 import java.util.regex.Pattern;
 import java.time.Instant;
-import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.TimeZone;
 
 import com.nandbox.bots.api.Nandbox;
 import com.nandbox.bots.api.Nandbox.Api;
@@ -29,20 +27,16 @@ import com.nandbox.bots.api.outmessages.OutMessage;
 import com.nandbox.bots.api.outmessages.PhotoOutMessage;
 import com.nandbox.bots.api.outmessages.AudioOutMessage;
 import com.nandbox.bots.api.outmessages.CancelScheduledOutMessage;
-import com.nandbox.bots.api.outmessages.ArticleOutMessage;
 import com.nandbox.bots.api.outmessages.ContactOutMessage;
 import com.nandbox.bots.api.outmessages.DocumentOutMessage;
-import com.nandbox.bots.api.outmessages.UserOutMessage;
 import com.nandbox.bots.api.outmessages.VideoOutMessage;
 import com.nandbox.bots.api.outmessages.VoiceOutMessage;
-import com.nandbox.bots.api.outmessages.UpdateOutMessage;
 import com.nandbox.bots.api.outmessages.LocationOutMessage;
 import com.nandbox.bots.api.outmessages.GifOutMessage;
 
 import com.nandbox.bots.api.util.Utils;
 
 import net.minidev.json.JSONObject;
-import net.minidev.json.JSONValue;
 
 
 class MessageRecaller{
@@ -201,11 +195,11 @@ public class AlertBot {
 	
 	public static void main(String[] args) throws Exception {
 		//The Helper class contains some helper functions which are called when needed
-		Helper help = new Helper();
+		final Helper help = new Helper();
 		
 		NandboxClient client = NandboxClient.get();
 		
-		String BotToken = "90091808909413495:0:yvhfDM5QExB54ywSCL260XS8D407gc";
+		String BotToken = "90091783926331810:0:8LDboxgOAonENMx2BTaBnkLp2Tr65B";
 		client.connect(BotToken, new Nandbox.Callback() {
 			Nandbox.Api api = null;
 			
