@@ -1,6 +1,8 @@
 package alertBot;
 import java.util.regex.Pattern;
 import java.time.Instant;
+import java.sql.SQLException;
+import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -38,18 +40,6 @@ import com.nandbox.bots.api.util.Utils;
 
 import net.minidev.json.JSONObject;
 
-
-class MessageRecaller{
-	String chatId;
-	String messageId;
-	String toUserId;
-	long reference;
-	
-	public MessageRecaller(String chatId,String messageId,String toUserId,long reference) {
-		this.messageId = messageId;
-		this.reference = reference;
-	}
-}
 
 class Helper{
 	public long GetWakeUpTime(int time,char format,long currentTime) {
@@ -125,6 +115,15 @@ class Helper{
 		api.send(clearMessage);
 	}
 	
+	public void sendClearMessageNew(String messageId,String chatId,int chatSettings,String userId,Api api)
+	{
+		//incomingScheduleMsg.getMessageId(), incomingScheduleMsg.getChat().getId(),1,incomingScheduleMsg.getFrom().getId(), api
+		TextOutMessage clearMessage = new TextOutMessage();
+		clearMessage.setText("To clear this alert, type '/clear "+messageId+"'");
+		clearMessage = (TextOutMessage) setMessageBasics(clearMessage, chatId, null,chatSettings,userId);
+		api.send(clearMessage);
+	}
+	
 	
 	//Format checking using regex
 	public boolean isHelpCommand(String messageText) {
@@ -135,7 +134,7 @@ class Helper{
 	}
 	
 	public boolean isClearCommand(String messageText) {
-		if(Pattern.compile("\\/clear\\s+[0-9]+\\s*").matcher(messageText).matches()) {
+		if(Pattern.compile("\\/clear\\s+[a-zA-Z0-9_]+\\s*").matcher(messageText).matches()) {
 			return true;
 		}
 		return false;
@@ -143,6 +142,13 @@ class Helper{
 	
 	public boolean isAlertCommand(String messageText) {
 		if(Pattern.compile("\\/alert\\s[0-9]+[m,h,d,w]\\s+(.|\\n)+").matcher(messageText).matches()) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean isListCommand(String messageText) {
+		if(Pattern.compile("\\/listAlerts\\s*").matcher(messageText).matches()) {
 			return true;
 		}
 		return false;
@@ -188,18 +194,19 @@ class Helper{
 
 public class AlertBot {
 	static HashMap<String,String> refToChat = new HashMap<String,String>();
-	static HashMap<String,String> chat_refToMsgID = new HashMap<String,String>();
-	
-	static ArrayList<MessageRecaller> scheduledMessages = new ArrayList<MessageRecaller>();
-	
+	static HashMap<String,String> chat_refToAdminID = new HashMap<String,String>();
 	
 	public static void main(String[] args) throws Exception {
 		//The Helper class contains some helper functions which are called when needed
 		final Helper help = new Helper();
+		final Database db = new Database("alerts");
+		
+		
 		
 		NandboxClient client = NandboxClient.get();
 		
 		String BotToken = "90091783926331810:0:8LDboxgOAonENMx2BTaBnkLp2Tr65B";
+		//String BotToken = "90091808909413495:0:GSZkrsMkyXzACp59iQxd2RYQUanmxS";
 		client.connect(BotToken, new Nandbox.Callback() {
 			Nandbox.Api api = null;
 			
@@ -207,7 +214,16 @@ public class AlertBot {
 			public void onConnect(Api api) {
 				// it will go here if the bot connected to server successfully 
 				System.out.println("Authenticated");
+				try {
+					db.createTable();
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					System.out.println("Database table couldn't be created, please make sure your db is setup correctly");
+					return;
+				}
 				this.api = api;
+				
 			}
 			
 			
@@ -222,18 +238,7 @@ public class AlertBot {
 				String userId = incomingMsg.getFrom().getId();
 				long sendingTime = incomingMsg.getDate();
 				
-				
-				/*MessageRecaller incomingMsgRecaller = new MessageRecaller(chatId,incomingMessageId,userId,incomingReference);
-				if(scheduledMessages.indexOf(incomingMsgRecaller) != -1) {
-					System.out.println("Found edited existing Message");
-				}
-				*/
-				
-				if(chat_refToMsgID.get(chatId+incomingMsg.getReference().toString()) != null)
-				{
-					chat_refToMsgID.remove(chatId+incomingMsg.getReference().toString());
-				}
-				
+
 				
 				//If this value timeString exists (not null) then the user has used the iAlert command and is now sending the alert message
 				String timeString = refToChat.get(userId+chatId);
@@ -296,7 +301,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 					
 					}
 					
@@ -309,7 +314,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 
 					}
 					
@@ -321,7 +326,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 
 					}
 					
@@ -343,7 +348,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 					}
 					
 					else if(incomingMsg.isLocationMsg()) 
@@ -355,7 +360,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 	
 					}
 					
@@ -368,7 +373,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 					}
 					
 					//Placeholder left to handle sticker alerts later
@@ -383,10 +388,12 @@ public class AlertBot {
 						message.setText(incomingMsg.getText());
 						message.setBgColor(incomingMsg.getBgColor());
 						message = (TextOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
+						
+						chat_refToAdminID.put(chatId+message.getReference(), userId);
+						
 						api.send(message);
-
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());						
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 						
 						
 						
@@ -400,11 +407,12 @@ public class AlertBot {
 						message.setVideo(incomingMsg.getVideo().getId());
 						message.setCaption(incomingMsg.getCaption());
 						message = (VideoOutMessage) help.setMessageBasics(message, chatId, scheduledTime,null,incomingMsg.getFrom().getId());
+						
 						api.send(message);
 						
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 
 					}
 					
@@ -416,7 +424,7 @@ public class AlertBot {
 						api.send(message);
 						
 						help.sendConfirmationMessage(chatId, api,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-						help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
+						//help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
 						
 						
 						
@@ -463,63 +471,89 @@ public class AlertBot {
 						if(help.isClearCommand(messageText))
 						{
 							String[] messageSplit = messageText.split(" ",2);
-							String chatRef = messageSplit[1];
-							String messageId = chat_refToMsgID.get(chatId+chatRef);
-							if(chat_refToMsgID.get(chatId+chatRef) != null)
-							{
-								System.out.println("message can be cleared");
-								CancelScheduledOutMessage cancel = new CancelScheduledOutMessage();
-								cancel.setMessageId(messageId);
-								cancel.setChatId(chatId);
-								api.send(cancel);
-								chat_refToMsgID.remove(chatId+chatRef);
-								
-								TextOutMessage message = new TextOutMessage();
-								message.setText("Alert has been cleared");
-								
-								message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-								api.send(message);
-							}
-							else
-							{
-								TextOutMessage message = new TextOutMessage();
-								message.setText("Alert hasn't been cleared. It doesn't exist");
-								
-								message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-								api.send(message);
+							//String chatRef = 
+							String messageId = messageSplit[1];
+							System.out.println("Message id is: "+messageId);
+							try {
+								if(db.alertExists(messageId))
+								{
+									System.out.println("message can be cleared");
+									CancelScheduledOutMessage cancel = new CancelScheduledOutMessage();
+									cancel.setMessageId(messageId);
+									cancel.setChatId(chatId);
+									api.send(cancel);
+									
+									try {
+										db.deleteAlert(messageId);
+									} catch (SQLException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+									
+									TextOutMessage message = new TextOutMessage();
+									message.setText("Alert has been cleared");
+									
+									message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
+									api.send(message);
+								}
+								else
+								{
+									TextOutMessage message = new TextOutMessage();
+									message.setText("Alert hasn't been cleared. It doesn't exist");
+									
+									message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
+									api.send(message);
+								}
+							} catch (SQLException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
 							}
 							return;
 							
 						}
-
-						if(help.isAlertCommand(messageText)) 
-						{
-							String[] messageSplit = messageText.split(" ",3);
-							timeString = messageSplit[1];
-							String alertText = messageSplit[2];
-	
-							long wakeUpTime = help.timeStringToScheduledTime_A(timeString, sendingTime);
-
-							//Send a confirmation message to the user to let him/her know that the alert has been set
-							TextOutMessage confirmationMessage = new TextOutMessage();
-							confirmationMessage.setText("Text Alert has been scheduled");							
-							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-							api.send(confirmationMessage);
-	
-							//Schedule the alert message to be sent at the specified time
-							TextOutMessage message = new TextOutMessage();
-							message.setText(alertText);
-							message.setBgColor(incomingMsg.getBgColor());
-							message = (TextOutMessage) help.setMessageBasics(message, chatId, wakeUpTime,null,incomingMsg.getFrom().getId());
-							api.send(message);
-							
-							help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
-							
-							
-							
-						}
 						
-						else if (help.isiAlertCommand_A(messageText) || help.isiAlertCommand_B(messageText)) 
+						if(help.isListCommand(messageText))
+						{
+							ArrayList<ArrayList<String>> alerts = new ArrayList<ArrayList<String>>();
+							try {
+								System.out.println(chatId);
+								System.out.println(userId);
+								alerts = db.getAlertsByAdmin(chatId, userId);
+								if(alerts.size() == 0)
+								{
+									TextOutMessage message = new TextOutMessage();
+									message.setText("No alerts are scheduled for you at the moment.");
+									message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
+									api.send(message);
+								}
+								else 
+								{
+									TextOutMessage message = new TextOutMessage();
+									String scheduledAlerts = "";
+									for(int i=0;i<alerts.size();i++)
+									{
+										String alertText = alerts.get(i).get(0);
+										String alertMessageId = alerts.get(i).get(1);
+										String alertDate = alerts.get(i).get(2);
+										int j = i+1;
+										scheduledAlerts += "Alert "+j+": "+alertText+"\nAlert Date: "+alertDate+"\nTo cancel, type '/clear "+alertMessageId+"'\n\n";
+									}
+									scheduledAlerts = scheduledAlerts.substring(0,scheduledAlerts.length()-3);
+									message.setText(scheduledAlerts);
+									message = (TextOutMessage) help.setMessageBasics(message, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
+									api.send(message);
+								}
+								
+							} catch (SQLException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							
+							return;
+						}
+
+						
+						if (help.isiAlertCommand_A(messageText) || help.isiAlertCommand_B(messageText)) 
 						{
 							String[] messageSplit = messageText.split(" ",2);
 							timeString = messageSplit[1];
@@ -534,48 +568,13 @@ public class AlertBot {
 							
 							
 							refToChat.put(userId+chatId,timeString);
-							
+							return;
 						}
 						
 					}
 					
 				}
 				
-
-				//Photo alert
-				else if(incomingMsg.isPhotoMsg()) 
-				{
-					if((((incomingMsg.isFromAdmin()==1) && incomingMsg.getChatSettings() == 1) || (!chatType.equals("Channel")))) 
-					{
-
-						//check if the caption follows the photo alert format using a regex
-						String photoCaption = incomingMsg.getCaption();
-						if(help.isPhotoAlertCommand(photoCaption)) 
-						{
-							String photoId = incomingMsg.getPhoto().getId();
-							
-							String[] messageSplit = photoCaption.split(" ",2);
-							timeString = messageSplit[1];
-							long wakeUpTime = help.timeStringToScheduledTime_A(timeString, sendingTime);
-							
-							
-							//Send a confirmation message to the user to let him/her know that the alert has been set
-							TextOutMessage confirmationMessage = new TextOutMessage();
-							confirmationMessage = (TextOutMessage) help.setMessageBasics(confirmationMessage, chatId, null,incomingMsg.getChatSettings(),incomingMsg.getFrom().getId());
-							confirmationMessage.setText("Photo Alert has been scheduled");
-							
-							api.send(confirmationMessage);
-							
-							//Schedule the alert message to be sent at the specified time
-							PhotoOutMessage message = new PhotoOutMessage();
-							message.setPhoto(photoId);
-							message.setCaption("");
-							message = (PhotoOutMessage) help.setMessageBasics(message, chatId, wakeUpTime,null,incomingMsg.getFrom().getId());
-							api.send(message);
-							help.sendClearMessage(message.getReference().toString(), chatId, incomingMsg, api);
-						}
-					}
-				}	
 
 		}
 			// implement other nandbox.Callback() as per your bot need .
@@ -613,7 +612,18 @@ public class AlertBot {
 			@Override
 			public void onMessagAckCallback(MessageAck msgAck) {
 				// TODO Auto-generated method stub
-				
+				System.out.println("msgack HERE");
+				//check if message is in DB
+				try {
+					if(db.alertExists(msgAck.getMessageId()))
+					{
+						db.deleteAlert(msgAck.getMessageId());
+						
+					}
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 
 			@Override
@@ -698,18 +708,39 @@ public class AlertBot {
 			public void onScheduleMessage(IncomingMessage incomingScheduleMsg) {
 				
 				//if channel chat
+				
 				if(incomingScheduleMsg.getSentTo() == null)
 				{
-					chat_refToMsgID.put(incomingScheduleMsg.getChat().getId()+incomingScheduleMsg.getReference().toString(), incomingScheduleMsg.getMessageId());
+					String adminId = chat_refToAdminID.get(incomingScheduleMsg.getChat().getId()+incomingScheduleMsg.getReference());
+					help.sendClearMessageNew(incomingScheduleMsg.getMessageId(), incomingScheduleMsg.getChat().getId(),1,adminId, api);
+					try {
+						Date scheduleDate = new Date(incomingScheduleMsg.getScheduleDate());
+						DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");  
+		                String strDate = dateFormat.format(scheduleDate); 
+						db.insertAlert(incomingScheduleMsg.getChat().getId(), adminId, incomingScheduleMsg.getMessageId(),strDate, incomingScheduleMsg.getText());
+					} catch (SQLException e) {
+						// TODO Auto-generated catch block
+						chat_refToAdminID.remove(incomingScheduleMsg.getChat().getId()+incomingScheduleMsg.getReference());
+						e.printStackTrace();
+					}
+					chat_refToAdminID.remove(incomingScheduleMsg.getChat().getId()+incomingScheduleMsg.getReference());
+
 				}
 				else
 				{
-					chat_refToMsgID.put(incomingScheduleMsg.getSentTo().getId()+incomingScheduleMsg.getReference().toString(), incomingScheduleMsg.getMessageId());
-				}
-				
-				
-				//api.sendText(incomingScheduleMsg.getChat().getId(), "scheduled here");
-				
+					help.sendClearMessageNew(incomingScheduleMsg.getMessageId(), incomingScheduleMsg.getSentTo().getId(),incomingScheduleMsg.getChatSettings(),incomingScheduleMsg.getFrom().getId(), api);
+					try {
+						
+						Date scheduleDate = new Date(incomingScheduleMsg.getScheduleDate());
+						DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");  
+		                String strDate = dateFormat.format(scheduleDate); 
+		                
+						db.insertAlert(incomingScheduleMsg.getSentTo().getId(), incomingScheduleMsg.getSentTo().getId(), incomingScheduleMsg.getMessageId(),strDate, incomingScheduleMsg.getText());
+					} catch (SQLException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}				
 			}
 		});
 	}
